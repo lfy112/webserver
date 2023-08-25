@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>WebServer</title>
+</head>
+
+<body>
+    <br />
+    <br />
+    <div align="center">
+        <font size="5"> <strong>欢迎访问</strong></font>
+    </div>
+    <br />
+    <br />
+    <form action="0" method="post">
+        <div align="center"><button type="submit">新用户</button></div>
+    </form>
+    <br />
+    <form action="1" method="post">
+        <div align="center"><button type="submit">已有账号</button></div>
+    </form>
+
+    <button id="fetchButton">获取数据</button>
+    <div id="dataDisplay"></div>
+
+    </div>
+    <script>
+        const fetchButton = document.getElementById('fetchButton');
+        const dataDisplay = document.getElementById('dataDisplay');
+
+
+        fetchButton.addEventListener('click', () => {
+            console.log("begin fetch")
+            // 使用fetch发送GET请求
+            fetch('/9')
+                .then(response => {
+                    // 检查响应状态
+                    if (!response.ok) {
+                        console.log('NOT OK')
+                        throw new Error(`Network response was not ok: ${response.status}`);
+                    }
+                    console.log('OK')
+                    // 解析响应体为JSON
+                    return response.json();
+                    // return response;
+                })
+                .then(data => {
+                    console.log('OK')
+                    // 在这里处理JSON数据
+                    console.log(data);
+                })
+                .catch(error => {
+                    // 处理错误情况
+                    console.error('Fetch error:', error);
+                });
+        });
+    </script>
+</body>
+
+</html>
