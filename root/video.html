@@ -1,19 +1,72 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>awsl</title>
-    </head>
-    <body><br/>
-<!-- <br/>
-<div align="center"><font size="5"> <strong>你居然想看视频，不想关注我</strong></font></div>
-<br/> -->
 
-<br/>
-<br/>
-<!-- <div align="center"><video width="906" height="506" controls>
-    <source src="xxx.mp4" type="video/mp4"> -->
-<div align="center"><video width="726" height="1286" controls>
-        <source src="xxxx.mp4" type="video/mp4">
-</video></div>
+<head>
+    <meta charset="UTF-8">
+    <title>看视频</title>
+    <script src="./vue.js"></script>
+</head>
+
+<body>
+    <br>
+    <div align="center">
+        <video width="906" height="506" controls>
+            <source src="xxx.mp4" type="video/mp4">
+        </video>
+    </div>
+    <br>
+
+    <div id="root">
+        请输入你的神仙评论 <input type="text" style="width: 100%;" v-model="comment"></br>
+        <button @click="submit">评论</button>
+    </div>
+
+</body>
+<script>
+    const vm = new Vue({
+        el: '#root',
+        data: {
+            comment: ''
+        },
+        methods: {
+            submit() {
+                console.log(`${vm.$data.comment}`)
+                const commentStr = vm.$data.comment;
+                if (commentStr === "") {
+                    alert("评论为空");
+                    return;
+                }
+                this.upload(commentStr);
+                // alert("评论成功")
+            },
+            upload(commentStr) {
+                var data = {
+                    commentStr: commentStr
+                };
+                console.log(data)
+                fetch('/u', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                    .then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        } else {
+                            // 处理错误情况
+                        }
+                    })
+                    .then(data => {
+                        // 处理响应数据
+                    })
+                    .catch(error => {
+                        // 处理网络错误等
+                    });
+            }
+        }
+    })
+</script>
+
 </html>

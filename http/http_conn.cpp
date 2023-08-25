@@ -423,6 +423,14 @@ http_conn::HTTP_CODE http_conn::do_request() {
         strcpy(m_url, "/logError.html");
     }
   }
+  if (*(p + 1) == 'u') {
+    LOG_DEBUG("receive\n");
+    LOG_DEBUG("%s", m_string);
+    std::string jsonStr(m_string);
+    json j = json::parse(jsonStr);
+    string comment = j["commentStr"];
+    LOG_DEBUG("parse success, comment is: %s", comment.c_str());
+  }
   if (*(p + 1) == '9') {
     json j = {{"name", "Sandman"}};
     std::string jsonString = j.dump();
