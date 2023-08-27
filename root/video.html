@@ -8,17 +8,40 @@
 </head>
 
 <body>
-    <br>
-    <div align="center">
-        <video width="906" height="506" controls>
-            <source src="xxx.mp4" type="video/mp4">
-        </video>
-    </div>
-    <br>
-
     <div id="root">
-        请输入你的神仙评论 <input type="text" style="width: 100%;" v-model="comment"></br>
-        <button @click="submit">评论</button>
+        <div v-if="this.user_name!==undefined">你好，{{this.user_name}}</div>
+        <div v-else>未登录</div>
+        <br>
+        <div align="center">
+            <video width="906" height="506" controls>
+                <source src="xxx.mp4" type="video/mp4">
+            </video>
+        </div>
+        <br>
+
+        <div>
+            请输入你的神仙评论 <input type="text" style="width: 100%;" v-model="comment"></br>
+            <button @click="submit">评论</button>
+        </div>
+
+        <div v-if="this.comment_list!==undefined">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>评论</th>
+                        <th>评论时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="item in comment_list" :key="comment_list.id">
+                        <td>{{ item.user_name }}</td>
+                        <td>{{ item.comment }}</td>
+                        <td>{{ item.comment_time }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
 </body>
@@ -26,10 +49,28 @@
     const vm = new Vue({
         el: '#root',
         data: {
-            comment: ''
+            comment: '',
+            user_name: undefined,
+            comment_list: undefined
+        },
+        mounted() {
+            var cookies = document.cookie.split('; ');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].split('=');
+                if (cookie[0] === "username") {
+                    this.user_name = cookie[1];
+                    console.log(this.user_name);
+                    this.download();
+                    return;
+                }
+            }
         },
         methods: {
             submit() {
+                if (this.user_name === undefined) {
+                    alert("未登录，无法评论")
+                    return;
+                }
                 console.log(`${vm.$data.comment}`)
                 const commentStr = vm.$data.comment;
                 if (commentStr === "") {
@@ -38,12 +79,13 @@
                 }
                 this.upload(commentStr);
                 // alert("评论成功")
+                // setTimeout()
             },
             upload(commentStr) {
                 var data = {
                     commentStr: commentStr
                 };
-                console.log(data)
+                // console.log(data)
                 fetch('/u', {
                     method: 'POST',
                     headers: {
@@ -55,18 +97,60 @@
                         if (response.ok) {
                             return response.json();
                         } else {
-                            // 处理错误情况
                         }
                     })
                     .then(data => {
-                        // 处理响应数据
+                        this.comment_list = data;
                     })
                     .catch(error => {
-                        // 处理网络错误等
+                    });
+            },
+            download() {
+                fetch('/d')
+                    .then(response => {
+                        if (!response.ok) {
+                            console.log('NOT OK')
+                            throw new Error(`Network response was not ok: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        this.comment_list = data;
+                    })
+                    .catch(error => {
+                        console.error('Fetch error:', error);
                     });
             }
         }
     })
 </script>
+<style>
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        /* 折叠边框 */
+    }
+
+    .custom-table th,
+    .custom-table td {
+        padding: 10px;
+        /* 单元格内边距 */
+        border: 1px solid #ccc;
+        /* 单元格边框 */
+    }
+
+    .custom-table th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+        text-align: left;
+    }
+
+    /* 修改列之间的间距 */
+    .custom-table th+th,
+    .custom-table td+td {
+        margin-left: 10px;
+        /* 调整列之间的左边距 */
+    }
+</style>
 
 </html>

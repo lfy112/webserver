@@ -2,8 +2,10 @@
 
 #include <mysql/mysql.h>
 
+#include <codecvt>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../json.hpp"
@@ -285,7 +287,12 @@ http_conn::HTTP_CODE http_conn::parse_headers(char *text) {
     text += 5;
     text += strspn(text, " \t");
     m_host = text;
+  } else if (strncasecmp(text, "Cookie: username=", 17) == 0) {
+    text += 17;
+    m_user_name = text;
+    text += strspn(text, " \t");
   } else {
+    m_user_name = "";
     LOG_INFO("oop!unknow header: %s", text);
   }
   return NO_REQUEST;
@@ -417,21 +424,103 @@ http_conn::HTTP_CODE http_conn::do_request() {
     // 如果是登录，直接判断
     // 若浏览器端输入的用户名和密码在表中可以查找到，返回1，否则返回0
     else if (*(p + 1) == '2') {
-      if (users.find(name) != users.end() && users[name] == password)
+      if (users.find(name) != users.end() && users[name] == password) {
         strcpy(m_url, "/welcome.html");
+        m_user_name = name;
+      }
+
       else
         strcpy(m_url, "/logError.html");
     }
   }
+  // 收到上传的评论
   if (*(p + 1) == 'u') {
-    LOG_DEBUG("receive\n");
-    LOG_DEBUG("%s", m_string);
+    LOG_DEBUG("receive comment: %s", m_string);
     std::string jsonStr(m_string);
-    json j = json::parse(jsonStr);
-    string comment = j["commentStr"];
+    json j;
+    try {
+      j = json::parse(jsonStr);
+    } catch (const json::parse_error &e) {
+      LOG_ERROR("JSON parsing failed: %s\n", e.what());
+    }
+    std::string comment = j["commentStr"];
     LOG_DEBUG("parse success, comment is: %s", comment.c_str());
-  }
-  if (*(p + 1) == '9') {
+
+    char formatted_time[20];
+    std::time_t now = std::time(nullptr);
+    std::strftime(formatted_time, sizeof(formatted_time), "%Y-%m-%d %H:%M:%S",
+                  std::localtime(&now));
+
+    // 先从连接池中取一个连接
+    MYSQL *mysql = NULL;
+    video_connectionRAII mysqlcon(&mysql, m_videoConnPool);
+
+    std::string sqlTmp = "insert into video_comment values (\"" +
+                         std::string(m_user_name) + "\", \"" + comment +
+                         "\", \"" + std::string(formatted_time) + "\", 0);";
+
+    if (mysql_query(mysql, sqlTmp.c_str())) {
+      LOG_ERROR("INSERT INTO error:%s\n", mysql_error(mysql));
+    } else {
+      json j;
+      if (mysql_query(
+              mysql,
+              "SELECT * FROM video_comment order by comment_time desc")) {
+        LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));
+      }
+      // 从表中检索完整的结果集
+      MYSQL_RES *result = mysql_store_result(mysql);
+      int cnt = 0;
+      while (MYSQL_ROW row = mysql_fetch_row(result)) {
+        string temp1(row[0]);
+        string temp2(row[1]);
+        string temp3(row[2]);
+        string temp4(row[3]);
+        LOG_DEBUG("%s-%s-%s-%s\n", temp1.c_str(), temp2.c_str(), temp3.c_str(),
+                  temp4.c_str());
+        json tmp = {{"user_name", temp1},
+                    {"comment", temp2},
+                    {"comment_time", temp3},
+                    {"zan", temp4}};
+        j[to_string(cnt)] = tmp;
+        ++cnt;
+      }
+      std::string jsonString = j.dump();
+      strncpy(m_write_comment_json, jsonString.c_str(),
+              sizeof(m_write_comment_json) - 1);
+      m_write_comment_json_idx = strlen(m_write_comment_json);
+      return COMMENT_SUCCESS;
+    }
+  } else if (*(p + 1) == 'd') {
+    json j;
+    if (mysql_query(mysql,
+                    "SELECT * FROM video_comment order by comment_time desc")) {
+      LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));
+    }
+    // 从表中检索完整的结果集
+    MYSQL_RES *result = mysql_store_result(mysql);
+    int cnt = 0;
+    while (MYSQL_ROW row = mysql_fetch_row(result)) {
+      string temp1(row[0]);
+      string temp2(row[1]);
+      string temp3(row[2]);
+      string temp4(row[3]);
+      LOG_DEBUG("%s-%s-%s-%s\n", temp1.c_str(), temp2.c_str(), temp3.c_str(),
+                temp4.c_str());
+      json tmp = {{"user_name", temp1},
+                  {"comment", temp2},
+                  {"comment_time", temp3},
+                  {"zan", temp4}};
+      j[to_string(cnt)] = tmp;
+      ++cnt;
+    }
+    std::string jsonString = j.dump();
+    strncpy(m_write_comment_json, jsonString.c_str(),
+            sizeof(m_write_comment_json) - 1);
+    m_write_comment_json_idx = strlen(m_write_comment_json);
+    return COMMENT_SUCCESS;
+  } else if (*(p + 1) == '9') {
+    LOG_DEBUG("%d", m_videoConnPool == nullptr);
     json j = {{"name", "Sandman"}};
     std::string jsonString = j.dump();
     const char *jsonStr = jsonString.c_str();
@@ -546,9 +635,7 @@ bool http_conn::add_response(const char *format, ...) {
   }
   m_write_idx += len;
   va_end(arg_list);
-
   LOG_INFO("request:%s", m_write_buf);
-
   return true;
 }
 bool http_conn::add_status_line(int status, const char *title) {
@@ -561,6 +648,22 @@ bool http_conn::add_status_line_json(int status, const char *title) {
 }
 bool http_conn::add_headers(int content_len) {
   return add_content_length(content_len) && add_linger() && add_blank_line();
+}
+bool http_conn::add_cookie(const char *cookie) {
+  // char buffer[80];
+  // std::time_t now = std::time(nullptr);
+  // std::strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT",
+  //               std::gmtime(&now));
+
+  std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+  std::chrono::system_clock::time_point expire_time =
+      now + std::chrono::minutes(10);
+
+  std::time_t expire_time_c = std::chrono::system_clock::to_time_t(expire_time);
+  char buffer[80];
+  std::strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT",
+                std::gmtime(&expire_time_c));
+  return add_response("Set-Cookie: username=%s\n", cookie);
 }
 bool http_conn::add_content_length(int content_len) {
   return add_response("Content-Length:%d\r\n", content_len);
@@ -599,6 +702,7 @@ bool http_conn::process_write(HTTP_CODE ret) {
     case FILE_REQUEST: {
       add_status_line(200, ok_200_title);
       if (m_file_stat.st_size != 0) {
+        if (!m_user_name.empty()) add_cookie(m_user_name.c_str());
         add_headers(m_file_stat.st_size);
         m_iv[0].iov_base = m_write_buf;
         m_iv[0].iov_len = m_write_idx;
@@ -615,7 +719,9 @@ bool http_conn::process_write(HTTP_CODE ret) {
     }
     case JSON_REQUEST: {
       add_status_line(200, ok_200_title);
+      if (!m_user_name.empty()) add_cookie(m_user_name.c_str());
       add_headers(m_write_json_idx);
+
       m_iv[0].iov_base = m_write_buf;
       m_iv[0].iov_len = m_write_idx;
       m_iv[1].iov_base = m_write_json_buf;
@@ -625,6 +731,20 @@ bool http_conn::process_write(HTTP_CODE ret) {
       LOG_INFO("json_request:%s", m_write_buf);
       LOG_DEBUG("json_request:%s", m_write_json_buf);
       LOG_DEBUG("m_write_json_idx:%d", m_write_json_idx);
+      return true;
+    }
+    case COMMENT_SUCCESS: {
+      add_status_line(200, ok_200_title);
+      if (!m_user_name.empty()) add_cookie(m_user_name.c_str());
+      add_headers(m_write_comment_json_idx);
+      m_iv[0].iov_base = m_write_buf;
+      m_iv[0].iov_len = m_write_idx;
+      m_iv[1].iov_base = m_write_comment_json;
+      m_iv[1].iov_len = m_write_comment_json_idx;
+      m_iv_count = 2;
+      bytes_to_send = m_write_idx + m_write_comment_json_idx;
+      LOG_DEBUG("%s", m_write_buf);
+      LOG_DEBUG("%s", m_write_comment_json);
       return true;
     }
     default:
@@ -637,6 +757,7 @@ bool http_conn::process_write(HTTP_CODE ret) {
   return true;
 }
 void http_conn::process() {
+  std::string user_name;
   HTTP_CODE read_ret = process_read();
   if (read_ret == NO_REQUEST) {
     modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);

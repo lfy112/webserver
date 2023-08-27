@@ -71,9 +71,11 @@ void WebServer::log_write() {
   {
     // 初始化日志
     if (1 == m_log_write)
-      Log::get_instance()->init("./ServerLog.log", m_close_log, 2000, 800000, 800);
+      Log::get_instance()->init("./ServerLog.log", m_close_log, 2000, 800000,
+                                800);
     else
-      Log::get_instance()->init("./ServerLog.log", m_close_log, 2000, 800000, 0);
+      Log::get_instance()->init("./ServerLog.log", m_close_log, 2000, 800000,
+                                0);
   }
 }
 
@@ -85,6 +87,36 @@ void WebServer::sql_pool() {
 
   // 初始化数据库读取表
   users->initmysql_result(m_connPool);
+
+  m_videoConnPool = video_connection_pool::GetInstance();
+  m_videoConnPool->init("localhost", m_user, m_passWord, m_databaseName, 3306,
+                        m_sql_num, m_close_log);
+  for (int i = 0; i < MAX_FD; ++i)
+    users[i].getVideoConnectionPool(m_videoConnPool);
+  // {
+  //   // 先从连接池中取一个连接
+  //   MYSQL *mysql = NULL;
+  //   video_connectionRAII mysqlcon(&mysql, m_videoConnPool);
+
+  //   if (mysql_query(mysql, "SELECT * FROM video_comment")) {
+  //     LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));
+  //   }
+  //   // 从表中检索完整的结果集
+  //   MYSQL_RES *result = mysql_store_result(mysql);
+  //   // 返回结果集中的列数
+  //   int num_fields = mysql_num_fields(result);
+  //   // 返回所有字段结构的数组
+  //   MYSQL_FIELD *fields = mysql_fetch_fields(result);
+  //   // 从结果集中获取下一行，将对应的用户名和密码，存入map中
+  //   while (MYSQL_ROW row = mysql_fetch_row(result)) {
+  //     string temp1(row[0]);
+  //     string temp2(row[1]);
+  //     string temp3(row[2]);
+  //     string temp4(row[3]);
+  //     LOG_DEBUG("%s-%s-%s-%s\n", temp1.c_str(), temp2.c_str(), temp3.c_str(),
+  //               temp4.c_str());
+  //   }
+  // }
 }
 
 void WebServer::thread_pool() {

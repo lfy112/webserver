@@ -57,6 +57,8 @@ class WebServer {
 
   // 数据库相关
   connection_pool *m_connPool;
+  video_connection_pool *m_videoConnPool;
+
   string m_user;          // 登陆数据库用户名
   string m_passWord;      // 登陆数据库密码
   string m_databaseName;  // 使用数据库名

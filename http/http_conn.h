@@ -57,12 +57,15 @@ class http_conn {
     FILE_REQUEST,
     INTERNAL_ERROR,
     CLOSED_CONNECTION,
-    JSON_REQUEST
+    JSON_REQUEST,
+    COMMENT_SUCCESS
   };
   enum LINE_STATUS { LINE_OK = 0, LINE_BAD, LINE_OPEN };
 
  public:
   http_conn() {}
+  http_conn(video_connection_pool *videoConnectionPool)
+      : m_videoConnPool(videoConnectionPool) {}
   ~http_conn() {}
 
  public:
@@ -76,6 +79,9 @@ class http_conn {
   void initmysql_result(connection_pool *connPool);
   int timer_flag;
   int improv;
+  void getVideoConnectionPool(video_connection_pool *vp) {
+    m_videoConnPool = vp;
+  }
 
  private:
   void init();
@@ -93,6 +99,7 @@ class http_conn {
   bool add_status_line(int status, const char *title);
   bool add_status_line_json(int status, const char *title);
   bool add_headers(int content_length);
+  bool add_cookie(const char *cookie);
   bool add_content_type();
   bool add_content_length(int content_length);
   bool add_linger();
@@ -115,6 +122,8 @@ class http_conn {
   int m_write_idx;
   char m_write_json_buf[10240];
   int m_write_json_idx;
+  char m_write_comment_json[20480];
+  int m_write_comment_json_idx;
   CHECK_STATE m_check_state;
   METHOD m_method;
   char m_real_file[FILENAME_LEN];
@@ -124,6 +133,7 @@ class http_conn {
   int m_content_length;
   bool m_linger;
   char *m_file_address;
+  std::string m_user_name;
   struct stat m_file_stat;
   struct iovec m_iv[2];
   int m_iv_count;
@@ -132,6 +142,7 @@ class http_conn {
   int bytes_to_send;
   int bytes_have_send;
   char *doc_root;
+  video_connection_pool *m_videoConnPool;
 
   map<string, string> m_users;
   int m_TRIGMode;
